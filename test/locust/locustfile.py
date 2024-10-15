@@ -85,9 +85,9 @@ class WebSocketUser(User):
                             logging.debug(f"Sending trunk {i}...")
                             self.client.send(chunk.raw_data)
                             time.sleep(0.25)
-                    silence = AudioSegment.silent(duration=10000)
-                    self.client.send(silence.raw_data)
-                    logging.info("Sent silence")
+                    # silence = AudioSegment.silent(duration=10000)
+                    # self.client.send(silence.raw_data)
+                    # logging.info("Sent silence")
         raise StopUser()
 
 
