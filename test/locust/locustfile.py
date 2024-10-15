@@ -59,9 +59,9 @@ class WebSocketUser(User):
     @task
     def send_streaming_audio(self):
 
-        self.client.send({"type":"config","data":{"sampleRate":48000,"channels":1,"language":"portuguese","processing_strategy":"silence_at_end_of_chunk","processing_args":{"chunk_length_seconds":2,"chunk_offset_seconds":0.1}}})
+        self.client.send('{"type":"config","data":{"sampleRate":48000,"channels":1,"language":"portuguese","processing_strategy":"silence_at_end_of_chunk","processing_args":{"chunk_length_seconds":2,"chunk_offset_seconds":0.1}}}')
         time.sleep(0.25)
-        
+
         self.start_time = time.time()
         for filename in os.listdir(self.audio_file_path):
             if filename.endswith(".wav"):
