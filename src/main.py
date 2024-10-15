@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument(
         "--asr-args",
         type=str,
-        default='{"model_size": "large-v3"}',
+        default='{"model_size": "large-v2"}',
         help="JSON string of additional arguments for ASR pipeline",
     )
     parser.add_argument(
@@ -83,12 +83,12 @@ def main():
         print(f"Error parsing JSON arguments: {e}")
         return
 
-    vad_pipeline = VADFactory.create_vad_pipeline(args.vad_type, **vad_args)
-    asr_pipeline = ASRFactory.create_asr_pipeline(args.asr_type, **asr_args)
-
+    # Pass pipeline types and arguments to the Server
     server = Server(
-        vad_pipeline,
-        asr_pipeline,
+        vad_type=args.vad_type,
+        vad_args=vad_args,
+        asr_type=args.asr_type,
+        asr_args=asr_args,
         host=args.host,
         port=args.port,
         sampling_rate=16000,

@@ -6,6 +6,8 @@ import uuid
 import websockets
 
 from src.client import Client
+from src.asr.asr_factory import ASRFactory
+from src.vad.vad_factory import VADFactory
 
 
 class Server:
@@ -15,22 +17,14 @@ class Server:
     This class manages WebSocket connections, processes incoming audio data,
     and interacts with VAD and ASR pipelines for voice activity detection and
     speech recognition.
-
-    Attributes:
-        vad_pipeline: An instance of a voice activity detection pipeline.
-        asr_pipeline: An instance of an automatic speech recognition pipeline.
-        host (str): Host address of the server.
-        port (int): Port on which the server listens.
-        sampling_rate (int): The sampling rate of audio data in Hz.
-        samples_width (int): The width of each audio sample in bits.
-        connected_clients (dict): A dictionary mapping client IDs to Client
-                                  objects.
     """
 
     def __init__(
         self,
-        vad_pipeline,
-        asr_pipeline,
+        vad_type,
+        vad_args,
+        asr_type,
+        asr_args,
         host="localhost",
         port=8765,
         sampling_rate=16000,
@@ -38,8 +32,6 @@ class Server:
         certfile=None,
         keyfile=None,
     ):
-        self.vad_pipeline = vad_pipeline
-        self.asr_pipeline = asr_pipeline
         self.host = host
         self.port = port
         self.sampling_rate = sampling_rate
@@ -48,7 +40,31 @@ class Server:
         self.keyfile = keyfile
         self.connected_clients = {}
 
-    async def handle_audio(self, client, websocket):
+        # Number of GPUs available
+        self.num_gpus = 4  # You can set this dynamically if needed
+
+        # Initialize pipelines for each GPU
+        self.vad_pipelines = []
+        self.asr_pipelines = []
+
+        for i in range(self.num_gpus):
+            # Set device index in args
+            vad_args_copy = vad_args.copy()
+            asr_args_copy = asr_args.copy()
+
+            vad_args_copy['device'] = 'cuda'
+            vad_args_copy['device_index'] = i
+            vad_pipeline = VADFactory.create_vad_pipeline(vad_type, **vad_args_copy)
+            self.vad_pipelines.append(vad_pipeline)
+
+            asr_args_copy['device'] = 'cuda'
+            asr_args_copy['device_index'] = i
+            asr_pipeline = ASRFactory.create_asr_pipeline(asr_type, **asr_args_copy)
+            self.asr_pipelines.append(asr_pipeline)
+
+        self.pipeline_index = 0  # To keep track of pipeline assignment
+
+    async def handle_audio(self, client, websocket, vad_pipeline, asr_pipeline):
         while True:
             message = await websocket.recv()
 
@@ -65,18 +81,26 @@ class Server:
 
             # this is synchronous, any async operation is in BufferingStrategy
             client.process_audio(
-                websocket, self.vad_pipeline, self.asr_pipeline
+                websocket, vad_pipeline, asr_pipeline
             )
 
     async def handle_websocket(self, websocket):
         client_id = str(uuid.uuid4())
+
+        # Assign ASR and VAD pipelines to client
+        pipeline_index = self.pipeline_index % self.num_gpus
+        self.pipeline_index += 1
+
+        assigned_vad_pipeline = self.vad_pipelines[pipeline_index]
+        assigned_asr_pipeline = self.asr_pipelines[pipeline_index]
+
         client = Client(client_id, self.sampling_rate, self.samples_width)
         self.connected_clients[client_id] = client
 
-        print(f"Client {client_id} connected")
+        print(f"Client {client_id} connected, assigned to GPU {pipeline_index}")
 
         try:
-            await self.handle_audio(client, websocket)
+            await self.handle_audio(client, websocket, assigned_vad_pipeline, assigned_asr_pipeline)
         except websockets.ConnectionClosed as e:
             print(f"Connection with {client_id} closed: {e}")
         finally:
@@ -107,7 +131,7 @@ class Server:
             )
         else:
             print(
-                f"WebSocket server ready to accept secure connections on "
+                f"WebSocket server ready to accept connections on "
                 f"{self.host}:{self.port}"
             )
             return websockets.serve(
