@@ -113,8 +113,14 @@ language_codes = {
 
 class FasterWhisperASR(ASRInterface):
     def __init__(self, **kwargs):
-        model_size = kwargs.get("model_size", "large-v3")
-        compute_type = kwargs.get("compute_type", "float16")
+        model_size = os.environ.get("MODEL_SIZE")
+        if not model_size:
+            model_size = kwargs.get("model_size", "large-v3")
+
+        compute_type = os.environ.get("COMPUTE_TYPE")
+        if not compute_type:
+            compute_type = kwargs.get("compute_type", "float16")
+            
         device = "cuda" if torch.cuda.is_available() else "cpu"
         # Run on GPU with FP16
         self.asr_pipeline = WhisperModel(
