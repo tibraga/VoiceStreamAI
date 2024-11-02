@@ -67,15 +67,24 @@ def parse_args():
         choices=["debug", "info", "warning", "error"],
         help="Logging level: debug, info, warning, error. default: error",
     )
+    parser.add_argument(
+        "--log-file", 
+        type=str, 
+        default="app.log", 
+        help="File to write logs to. default: app.log"
+    )
+
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
 
-    logging.basicConfig()
-    logging.getLogger().setLevel(args.log_level.upper())
-
+    logging.basicConfig(
+        filename=args.log_file,
+        level=args.log_level.upper(),
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
     try:
         vad_args = json.loads(args.vad_args)
         asr_args = json.loads(args.asr_args)
