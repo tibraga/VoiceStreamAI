@@ -2,11 +2,25 @@ import argparse
 import asyncio
 import json
 import logging
+import sys
 
 from src.asr.asr_factory import ASRFactory
 from src.vad.vad_factory import VADFactory
-
 from .server import Server
+
+
+class StreamToLogger:
+    """Classe que redireciona sys.stdout e sys.stderr para o logger"""
+    def __init__(self, logger, log_level):
+        self.logger = logger
+        self.log_level = log_level
+
+    def write(self, message):
+        if message.strip():  # Ignorar mensagens vazias
+            self.logger.log(self.log_level, message.strip())
+
+    def flush(self):
+        pass  # Necessário para compatibilidade com sys.stdout e sys.stderr
 
 
 def parse_args():
@@ -14,82 +28,39 @@ def parse_args():
         description="VoiceStreamAI Server: Real-time audio transcription "
         "using self-hosted Whisper and WebSocket."
     )
-    parser.add_argument(
-        "--vad-type",
-        type=str,
-        default="pyannote",
-        help="Type of VAD pipeline to use (e.g., 'pyannote')",
-    )
-    parser.add_argument(
-        "--vad-args",
-        type=str,
-        default='{"auth_token": "huggingface_token"}',
-        help="JSON string of additional arguments for VAD pipeline",
-    )
-    parser.add_argument(
-        "--asr-type",
-        type=str,
-        default="faster_whisper",
-        help="Type of ASR pipeline to use (e.g., 'whisper')",
-    )
-    parser.add_argument(
-        "--asr-args",
-        type=str,
-        default='{"model_size": "large-v3"}',
-        help="JSON string of additional arguments for ASR pipeline",
-    )
-    parser.add_argument(
-        "--host",
-        type=str,
-        default="127.0.0.1",
-        help="Host for the WebSocket server",
-    )
-    parser.add_argument(
-        "--port", type=int, default=8765, help="Port for the WebSocket server"
-    )
-    parser.add_argument(
-        "--certfile",
-        type=str,
-        default=None,
-        help="The path to the SSL certificate (cert file) if using secure "
-        "websockets",
-    )
-    parser.add_argument(
-        "--keyfile",
-        type=str,
-        default=None,
-        help="The path to the SSL key file if using secure websockets",
-    )
-    parser.add_argument(
-        "--log-level",
-        type=str,
-        default="error",
-        choices=["debug", "info", "warning", "error"],
-        help="Logging level: debug, info, warning, error. default: error",
-    )
-    parser.add_argument(
-        "--log-file", 
-        type=str, 
-        default="app.log", 
-        help="File to write logs to. default: app.log"
-    )
-
+    parser.add_argument("--vad-type", type=str, default="pyannote", help="Type of VAD pipeline to use (e.g., 'pyannote')")
+    parser.add_argument("--vad-args", type=str, default='{"auth_token": "huggingface_token"}', help="JSON string of additional arguments for VAD pipeline")
+    parser.add_argument("--asr-type", type=str, default="faster_whisper", help="Type of ASR pipeline to use (e.g., 'whisper')")
+    parser.add_argument("--asr-args", type=str, default='{"model_size": "large-v3"}', help="JSON string of additional arguments for ASR pipeline")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host for the WebSocket server")
+    parser.add_argument("--port", type=int, default=8765, help="Port for the WebSocket server")
+    parser.add_argument("--certfile", type=str, default=None, help="The path to the SSL certificate (cert file) if using secure websockets")
+    parser.add_argument("--keyfile", type=str, default=None, help="The path to the SSL key file if using secure websockets")
+    parser.add_argument("--log-level", type=str, default="error", choices=["debug", "info", "warning", "error"], help="Logging level: debug, info, warning, error. default: error")
+    parser.add_argument("--log-file", type=str, default="app.log", help="File to write logs to. default: app.log")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
 
+    # Configuração do logger para registrar no arquivo e redirecionar stdout/stderr
     logging.basicConfig(
         filename=args.log_file,
         level=args.log_level.upper(),
         format="%(asctime)s - %(levelname)s - %(message)s",
     )
+
+    # Redireciona sys.stdout e sys.stderr para o logger
+    logger = logging.getLogger()
+    sys.stdout = StreamToLogger(logger, logging.INFO)
+    sys.stderr = StreamToLogger(logger, logging.ERROR)
+
     try:
         vad_args = json.loads(args.vad_args)
         asr_args = json.loads(args.asr_args)
     except json.JSONDecodeError as e:
-        print(f"Error parsing JSON arguments: {e}")
+        logging.error(f"Error parsing JSON arguments: {e}")
         return
 
     vad_pipeline = VADFactory.create_vad_pipeline(args.vad_type, **vad_args)

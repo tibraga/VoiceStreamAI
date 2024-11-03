@@ -1,74 +1,19 @@
-# # Use an NVIDIA CUDA base image with Python 3
-# # FROM nvidia/cuda:11.6.2-cudnn8-runtime-ubuntu20.04
-# FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
-# # FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
-
-# # Set the working directory in the container
-# WORKDIR /usr/src/app
-
-# # Avoid interactive prompts from apt-get
-# ENV DEBIAN_FRONTEND=noninteractive
-
-# # Install any needed packages
-# RUN apt-get update && \
-#   apt-get install -y python3-pip libsndfile1 ffmpeg && \
-#   apt-get clean && \
-#   rm -rf /var/lib/apt/lists/*
-
-# # RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb && \
-# #     dpkg -i cuda-keyring_1.1-1_all.deb && \
-# #     apt-get update && \
-# #     apt-get install --reinstall libcudnn9-cuda-12 libcudnn9-dev-cuda-12 libcudnn9-samples
-
-
-# # Copy the requirements.txt file
-# COPY requirements.txt ./
-
-# # Install any needed packages specified in requirements.txt
-# RUN pip3 install --no-cache-dir -r requirements.txt
-
-# # Copy the rest of your application's code
-# COPY . .
-
-# # Make port 80 available to the world outside this container
-# EXPOSE 8888
-
-# # Define environment variable
-# ENV NAME VoiceStreamAI
-
-# # Set the entrypoint to your application
-# ENTRYPOINT ["python3", "-m", "src.main"]
-
-# # Provide a default command (can be overridden at runtime)
-# CMD ["--host", "0.0.0.0", "--port", "8888", "--log-level", "debug"]
-
-
-
-
-
-
 FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 WORKDIR /usr/src/app
 
-COPY requirements.txt ./
-COPY setup.sh ./
+COPY . /usr/src/app/
+
+SHELL ["/bin/bash", "-c"]
 
 RUN python3 -m pip install --no-cache-dir -r ./requirements.txt
+RUN python3 -m pip install ctranslate2==4.4.0
 
-RUN chmod +x setup.sh
-RUN ./setup.sh
-# Carrega o LD_LIBRARY_PATH a partir do .bashrc
-SHELL ["/bin/bash", "-c"]
-RUN source ~/.bashrc
+RUN apt-get update && apt-get install -y supervisor
+COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+RUN mkdir -p /var/run/supervisor
+# Defina o LD_LIBRARY_PATH dinamicamente
+RUN export LIB_PATH=$(python3 -c 'import os; import nvidia.cublas.lib; import nvidia.cudnn.lib; print(os.path.dirname(nvidia.cublas.lib.__file__) + ":" + os.path.dirname(nvidia.cudnn.lib.__file__))') && \
+    sed -i "/\[program:app1\]/a environment=LD_LIBRARY_PATH=\"$LIB_PATH:\$LD_LIBRARY_PATH\"" /etc/supervisor/conf.d/supervisord.conf
 
-COPY . .
-
-# Make port 80 available to the world outside this container
-EXPOSE 8100
-
-# Set the entrypoint to your application
-ENTRYPOINT ["python3", "-m", "src.main"]
-
-# Provide a default command (can be overridden at runtime)
-CMD ["--host", "0.0.0.0", "--port", "8100", "--log-level", "debug"]
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
