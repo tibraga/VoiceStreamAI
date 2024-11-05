@@ -1,4 +1,5 @@
 from .buffering_strategies import SilenceAtEndOfChunk
+from .unique_chunk_strategy import UniqueChunk
 
 
 class BufferingStrategyFactory:
@@ -45,5 +46,7 @@ class BufferingStrategyFactory:
         """
         if type == "silence_at_end_of_chunk":
             return SilenceAtEndOfChunk(client, **kwargs)
+        elif type == "UniqueChunk":
+            return UniqueChunk(client, **kwargs)
         else:
             raise ValueError(f"Unknown buffering strategy type: {type}")
