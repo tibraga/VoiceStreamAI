@@ -82,34 +82,48 @@ class Server:
         finally:
             del self.connected_clients[client_id]
 
+    async def process_request(self, path, request_headers):
+        """
+        Handle incoming HTTP requests before the WebSocket handshake.
+
+        Args:
+            path (str): The request path.
+            request_headers (dict): The request headers.
+
+        Returns:
+            A tuple of (HTTP status code, response headers, response body)
+            if handling an HTTP request, or None to continue with WebSocket.
+        """
+        if path == '/healthcheck':
+            # Respond with a 200 OK for the health check
+            return (
+                200,
+                [('Content-Type', 'text/plain')],
+                b'OK'
+            )
+        else:
+            # Return None to proceed with the WebSocket handshake
+            return None
+
     def start(self):
+        print("AQUI!")
+        ssl_context = None
         if self.certfile:
             # Create an SSL context to enforce encrypted connections
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-
-            # Load your server's certificate and private key
-            # Replace 'your_cert_path.pem' and 'your_key_path.pem' with the
-            # actual paths to your files
             ssl_context.load_cert_chain(
                 certfile=self.certfile, keyfile=self.keyfile
             )
 
-            print(
-                f"WebSocket server ready to accept secure connections on "
-                f"{self.host}:{self.port}"
-            )
+        print(
+            f"WebSocket server ready to accept connections on "
+            f"{self.host}:{self.port}"
+        )
 
-            # Pass the SSL context to the serve function along with the host
-            # and port. Ensure the secure flag is set to True if using a secure
-            # WebSocket protocol (wss://)
-            return websockets.serve(
-                self.handle_websocket, self.host, self.port, ssl=ssl_context
-            )
-        else:
-            print(
-                f"WebSocket server ready to accept secure connections on "
-                f"{self.host}:{self.port}"
-            )
-            return websockets.serve(
-                self.handle_websocket, self.host, self.port
-            )
+        return websockets.serve(
+            self.handle_websocket,
+            self.host,
+            self.port,
+            ssl=ssl_context,
+            process_request=self.process_request  # Add this line
+        )

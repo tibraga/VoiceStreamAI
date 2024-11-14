@@ -9,3 +9,5 @@ venv
 # IDE/editor
 .idea
 .vscode
+
+Makefile

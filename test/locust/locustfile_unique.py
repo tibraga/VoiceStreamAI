@@ -22,13 +22,13 @@ class WebSocketUser(User):
     def __init__(self, environment):
         super().__init__(environment)
         self.pool = Pool(100)
-        with self.environment.events.request.measure("[Connect]", "Websocket"):
-            self.client = connect(self.host)
-            self.client.send('{"type":"config","data":{"sampleRate":48000,"channels":1,"language":"portuguese","processing_strategy":"silence_at_end_of_chunk","processing_args":{"chunk_length_seconds":2,"chunk_offset_seconds":0.05}}}')
-            gevent.sleep(0.25)
-
 
     def on_start(self):
+
+        with self.environment.events.request.measure("[Connect]", "Websocket"):
+            self.client = connect(self.host)
+            self.client.send('{"type":"config","data":{"sampleRate":48000,"channels":1,"language":"portuguese","processing_strategy":"UniqueChunk","processing_args":{"chunk_length_seconds":2,"chunk_offset_seconds":0.05}}}')
+            gevent.sleep(0.25)
 
         def _receive():
             while True:
@@ -44,7 +44,7 @@ class WebSocketUser(User):
                     transcription_end = time.time()
                     time_elapse = round(transcription_end - self.start_time, 2)
                     transcription_json = json.loads(transcription_str)
-                    logging.debug(transcription_json)
+                    # logging.info(transcription_json)
                     logging.info(
                         f"[{client_id}] Time elapse: {time_elapse}s, Received: {transcription_json['text']}"
                     )
@@ -67,10 +67,8 @@ class WebSocketUser(User):
 
     @task
     def send_streaming_audio(self):
-        logging.info(f"audio_file_path: {self.audio_file_path}")
         for filename in os.listdir(self.audio_file_path):
             self.start_time = time.time()
-            logging.info(f"filenamee: {filename}")
             if filename.endswith(".wav") or filename.endswith(".mp3"):
                 audio_file = os.path.join(self.audio_file_path, filename)
                 logging.info(f"Loading audio file: {audio_file}")
@@ -89,11 +87,9 @@ class WebSocketUser(User):
                             logging.error("File loading error:", e)
 
                         logging.info("Start sending audio")
-                        for i in range(0, len(audio), 250):
-                            chunk = audio[i : i + 250]
-                            logging.debug(f"Sending trunk {i}...")
-                            self.client.send(chunk.raw_data)
-                            gevent.sleep(0.25)
+                        self.client.send(audio.raw_data)
+                        gevent.sleep(1)
+
         gevent.sleep(60)
         raise StopUser()
 
